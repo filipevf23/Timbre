@@ -1,52 +1,51 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <sys/stat.h>
-#include <sys/types.h>
-#include <alsa/asoundlib.h>
+#include <unistd.h>
 #include <math.h>
-#include <pthread.h>
+#include <SDL3/SDL.h>
 
-#define M_PI 3.14159265358979323846
 #define FAIL exit(EXIT_FAILURE);
 #define READ 0
 #define WRITE 1
-#define RATE 44100
-#define FREQ 169.0f
+#define RATE 48000
+#define NOTE_A 440.0f
 #define CHUNK_SIZE 1024
 
-double note = FREQ;
+double note = NOTE_A;
 
-void *play_note(void *input) {
-    snd_pcm_t *pcm = (snd_pcm_t *)input;
-    short buffer[CHUNK_SIZE];
+int MyAudioThread(void *data) {
+    SDL_AudioStream *stream = (SDL_AudioStream *)data;
     double phase = 0.0;
+    float audio_buf[CHUNK_SIZE];
+
     for (;;) {
-        
-        for (int i=0;i<CHUNK_SIZE; i++) {
-            buffer[i] = 32760 * sin(phase);
-            // Incrementa a fase gradualmente baseada na nota global atual
-            phase += 2.0 * M_PI * note / RATE;
-            
-            // Evita que a variável phase cresça ao infinito e estoure o limite do double
-            if (phase >= 2.0 * M_PI) {
-                phase -= 2.0 * M_PI;
+        if (SDL_GetAudioStreamAvailable(stream) < (CHUNK_SIZE * sizeof(float) * 2)) {
+            for (int i = 0; i < CHUNK_SIZE; i++) {
+                audio_buf[i] = (float)sin(phase);
+                
+                // Avança a onda no tempo usando a 'note' (frequência) atual
+                phase += (2.0 * SDL_PI_F * note) / RATE;
+                
+                // Impede que a variável phase cresça ao infinito
+                if (phase > 2.0 * SDL_PI_F) {
+                    phase -= 2.0 * SDL_PI_F;
+                }
             }
-        }
-        snd_pcm_sframes_t frames = snd_pcm_writei(pcm, buffer, CHUNK_SIZE);
-        if (frames < 0) {
-            snd_pcm_recover(pcm, frames, 0); // ALSA tenta se recuperar sozinho!
+            SDL_PutAudioStreamData(stream, audio_buf, sizeof(audio_buf));
+        } else {
+            SDL_Delay(1);
         }
     }
-    return NULL;
+
+    return 0;
 }
 
 int main() {
 
     // PIPE BETWEEN LC AND THIS --------
     const char *myfifo = "/tmp/timbrefifo";
-    
     if (access(myfifo, F_OK) != 0) {
         if ((mkfifo(myfifo, 0666)) == -1) {
             perror("mkfifo");
@@ -58,7 +57,6 @@ int main() {
         perror("open myfifo");
         exit(EXIT_FAILURE);
     }
-
     FILE *file = fdopen(fd, "r");
     if (file == NULL) {
         perror("fdopen myfifo");
@@ -66,43 +64,38 @@ int main() {
     }
     // ---------------------------------
 
-    // ALSA AUDIO SIMPLES --------------
-    snd_pcm_t *pcm;  
 
-    // 1. O SEGREDO DA SIMPLICIDADE: Abrir e configurar em 2 linhas
-    if (snd_pcm_open(&pcm, "default", SND_PCM_STREAM_PLAYBACK, 0) < 0) {
-        fprintf(stderr, "Erro ao abrir o dispositivo de áudio.\n");
-        return 1;
+
+    // SDL THINGS ----------------------
+    if (!SDL_Init(SDL_INIT_AUDIO)) {
+        fprintf(stderr, "Erro SDL Init: %s\n", SDL_GetError());
+        FAIL
     }
-    
-    // Configura formato 16-bit, interleaved, 1 canal (mono), taxa 44100, e latência de 500000us (0.5s)
-    if (snd_pcm_set_params(pcm, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, 1, RATE, 1, 500000) < 0) {
-        fprintf(stderr, "Erro ao configurar parâmetros do ALSA.\n");
-        return 1;
+
+    const SDL_AudioSpec src_spec = {.format = SDL_AUDIO_F32, .channels = 1, .freq = RATE};
+    SDL_AudioStream *stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &src_spec, NULL, NULL);
+    if (!stream) {
+        fprintf(stderr, "Error opening AudioDevice: %s\n", SDL_GetError());
+        exit(EXIT_FAILURE);
     }
-    
+    SDL_ResumeAudioStreamDevice(stream);
+    SDL_CreateThread(MyAudioThread, "My Audio Thread", stream);
     // ---------------------------------
-    
 
-    pthread_t td;
-    pthread_create(&td, NULL, play_note, (void *)pcm);
-    pthread_detach(td);
     
     char *buf = NULL;
     size_t len = 0;
-    int line = 1;
 
     // Waits forever for new notes
     for (;;) {
         if ((getline(&buf, &len, file)) != -1) {
-            line = atoi(buf);
-            note = FREQ + (double)line;  
+            int line = atoi(buf);
+            note = NOTE_A + (double)line;  
         }
     }
 
-    pthread_cancel(td);
-    snd_pcm_drain(pcm);
-    snd_pcm_close(pcm);
+    SDL_DestroyAudioStream(stream);
+    SDL_Quit();
     free(buf);
     fclose(file);
     return 0;
