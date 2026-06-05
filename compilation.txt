@@ -1,3 +1,0 @@
-gcc -Wall play_sound.c -o play_sound $(pkg-config --cflags --libs sdl3) -lm
-gcc -Wall line_catcher.c -o line_catcher
-gcc -Wall main.c -o timbre
