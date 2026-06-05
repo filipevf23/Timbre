@@ -1,0 +1,11 @@
+{
+    "name": "meu-rastreador-cursor",
+    "version": "1.0.0",
+    "engines": {
+        "vscode": "^1.60.0"
+    },
+    "activationEvents": [
+        "*"
+    ],
+    "main": "./extension.js"
+}
