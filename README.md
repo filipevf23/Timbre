@@ -1,4 +1,4 @@
-# Timbre: The Dynamic Music Player
+# Timbre - Automated Background Music
 
 A lightweight, background audio player designed to make your programming sessions more immersive. This project plays background music that dynamically changes and reacts based on the code you write in real-time.
 
