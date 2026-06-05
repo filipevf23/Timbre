@@ -1,5 +1,5 @@
 {
-    "name": "meu-rastreador-cursor",
+    "name": "timbre-observer",
     "version": "1.0.0",
     "engines": {
         "vscode": "^1.60.0"
