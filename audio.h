@@ -3,8 +3,10 @@
 
 typedef SDL_AudioStream AudioPlayer;
 
-extern _Atomic double note;
+extern _Atomic int note;
+extern _Atomic char notes[];
 
-void AddToNote(double add);
+double getKeyFreq(int key);
+void AddToNote(int add);
 AudioPlayer *AudioPlayerInit();
 void AudioPlayerQuit(AudioPlayer *);

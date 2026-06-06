@@ -12,8 +12,7 @@ int Timbre(const char *path) {
     while (1) {
         int info;
         if (GetInfo(obs, &info) == 0) {
-            double newnote = (double) info;
-            AddToNote(newnote);
+            AddToNote(info);
         } else break;
     }
 

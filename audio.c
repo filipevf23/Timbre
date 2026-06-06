@@ -6,13 +6,21 @@
 
 #define RATE 48000
 #define NOTE_A 440.0f
-#define STARTING_NOTE 200.0f
+#define ALL_NOTES 88
+#define STARTING_NOTE 1
 #define CHUNK_SIZE 1024
 
-_Atomic double note = STARTING_NOTE;
+_Atomic int note = STARTING_NOTE;
+_Atomic char notes[ALL_NOTES+1] = {0};
 
-void AddToNote(double add) {
-    note = STARTING_NOTE + 2.0f*add;
+void AddToNote(int add) {
+    if (add > ALL_NOTES) return;
+    notes[add] = 1;
+    note = STARTING_NOTE + add;
+}
+
+double getKeyFreq(int key) {
+    return pow(2, (double)(note - 49)/(double)12)*NOTE_A;
 }
 
 int MyAudioThread(void *data) {
@@ -24,7 +32,7 @@ int MyAudioThread(void *data) {
         if (SDL_GetAudioStreamAvailable(stream) < (CHUNK_SIZE * sizeof(float) * 2)) {
             for (int i = 0; i < CHUNK_SIZE; i++) {
                 audio_buf[i] = (float)sin(phase);
-                phase += (2.0 * SDL_PI_F * note) / RATE;
+                phase += (2.0 * SDL_PI_F * getKeyFreq(note)) / RATE;
                 if (phase > 2.0 * SDL_PI_F) {
                     phase -= 2.0 * SDL_PI_F;
                 }
@@ -60,3 +68,25 @@ void AudioPlayerQuit(AudioPlayer *player) {
     SDL_DestroyAudioStream(player);
     SDL_Quit();
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
