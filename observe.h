@@ -5,9 +5,10 @@ typedef int FileObserver; /*  This observes File changes in the directory provid
 typedef struct Observer Observer;
 
 int InitSocket(void);
+char **GetFiles(const char *, int *);
 
 CursorObserver *CreateCursorObserver(const int);
-FileObserver *CreateFileObserver();
+FileObserver *CreateFileObserver(const char *);
 Observer *CreateObserver(const char *, const int);
 void DestroyObserver(Observer *);
 int GetInfo(Observer *, int *);

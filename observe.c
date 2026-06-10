@@ -8,15 +8,18 @@
     #endif
     #include <winsock2.h>
     #include <ws2tcpip.h>
+    #include <windows.h>
     #define ISVALIDSOCKET(s) ((s) != INVALID_SOCKET)
-    #define GETSOCKETERRNO() (WSAGetLastError())
     #define CLOSESOCKET(s) closesocket(s)
+    #define GETSOCKETERRNO() (WSAGetLastError())
 
 #elif defined(__linux__) || defined(__APPLE__)
     #include <sys/socket.h>
     #include <netinet/ip.h>
     #include <unistd.h>
     #include <errno.h>
+    #include <sys/types.h>
+    #include <dirent.h>
     #define ISVALIDSOCKET(s) ((s) >= 0)
     #define CLOSESOCKET(s) close(s)
     #define GETSOCKETERRNO() (errno)
@@ -50,12 +53,45 @@ int InitSocket(void) {
 #endif
 }
 
-CursorObserver *CreateCursorObserver(const int port) {
-    /* Create, bind, accept and listen */
-    if (InitSocket() != 0) {
-        perror("InitSocket");
+char **GetFiles(const char *path, int *filecount) {
+    static const int MAXFILENUM = 32;
+    static const int MAXFILENAMESIZE = 256;
+    char **files = malloc(MAXFILENUM*sizeof(char*));
+    *filecount = 0;
+    for (int i=0; i<MAXFILENUM; i++) files[i] = malloc(MAXFILENAMESIZE*sizeof(char));
+#ifdef _WIN32
+    WIN32_FIND_DATAA findData;
+    HANDLE handle;
+    if ((handle = FindFirstFileA(path, &findData)) == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "FileObserver couldn't open directory.\n");
         exit(EXIT_FAILURE);
     }
+    do {
+        if (strcmp(findData.cFileName, ".") != 0 && strcmp(findData.cFileName, "..") != 0) {
+            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) 
+                continue;
+            strcpy(files[(*filecount)++], findData.cFileName); 
+        }
+    } while (FindNextFileA(handle, &findData) != 0);
+    FindClose(handle);
+#else
+    DIR *dir = opendir(path);
+    struct dirent* in_file;
+    if (dir == NULL) {
+        fprintf(stderr, "FileObserver couldn't open directory.\n");
+        exit(EXIT_FAILURE);
+    }
+    while ((in_file = readdir(dir))) {
+        if (strcmp(findData.cFileName, ".") != 0 && strcmp(findData.cFileName, "..") != 0) {
+            strcpy(files[(*filecount)++], in_file->d_name);
+        }
+    }
+#endif
+    return files;
+}
+
+CursorObserver *CreateCursorObserver(const int port) {
+    /* Create, bind, accept and listen */
     CursorObserver *co = malloc(sizeof(CursorObserver));
     co->socket = socket(AF_INET, SOCK_STREAM, 0);
     if (!ISVALIDSOCKET(co->socket)) {
@@ -81,19 +117,30 @@ CursorObserver *CreateCursorObserver(const int port) {
     return co;
 }
 
-FileObserver *CreateFileObserver() {
-    // This is placeholder!
+FileObserver *CreateFileObserver(const char *dir) {
     int *fo = malloc(sizeof(int));
     *fo = 1;
+
+    int filecount;
+    char **files = GetFiles(dir, &filecount);
+    for (int i=0; i<filecount; i++) {
+        printf("%s\n", files[i]);
+    }
+
     return fo;
 }
 
 Observer *CreateObserver(const char *path, const int port) {
 
+    if (InitSocket() != 0) {
+        perror("InitSocket");
+        exit(EXIT_FAILURE);
+    }
+
     Observer *obs = malloc(sizeof(Observer));
 
     obs->co = CreateCursorObserver(port);
-    obs->fo = CreateFileObserver(); // This does nothing for now
+    obs->fo = CreateFileObserver(path); 
 
     return obs;
 }
