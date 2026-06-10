@@ -25,12 +25,19 @@
     #define GETSOCKETERRNO() (errno)
 #endif
 
+#define MAXFILENUM 32
+#define MAXFILENAMESIZE 256
 
 /* Struct Definitions  ========================== */
 struct CursorObserver {
     int socket;
     struct sockaddr_in addr;
     socklen_t sizeaddr;
+};
+
+struct FileObserver {
+    int filecount;
+    char **filenames;
 };
 
 struct Observer{
@@ -53,9 +60,10 @@ int InitSocket(void) {
 #endif
 }
 
-char **GetFiles(const char *path, int *filecount) {
-    static const int MAXFILENUM = 32;
-    static const int MAXFILENAMESIZE = 256;
+char **GetFiles(const char *p, int *filecount) {
+    char *path = malloc((strlen(p) + 3)*sizeof(char));
+    strcpy(path, p);
+    strcat(path, "\\*");
     char **files = malloc(MAXFILENUM*sizeof(char*));
     *filecount = 0;
     for (int i=0; i<MAXFILENUM; i++) files[i] = malloc(MAXFILENAMESIZE*sizeof(char));
@@ -67,6 +75,7 @@ char **GetFiles(const char *path, int *filecount) {
         exit(EXIT_FAILURE);
     }
     do {
+        if (*filecount >= MAXFILENUM) break;
         if (strcmp(findData.cFileName, ".") != 0 && strcmp(findData.cFileName, "..") != 0) {
             if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) 
                 continue;
@@ -82,7 +91,10 @@ char **GetFiles(const char *path, int *filecount) {
         exit(EXIT_FAILURE);
     }
     while ((in_file = readdir(dir))) {
-        if (strcmp(findData.cFileName, ".") != 0 && strcmp(findData.cFileName, "..") != 0) {
+        if (*filecount >= MAXFILENUM) break;
+        if (in_file->d_type == DT_DIR)
+                continue;
+        if (strcmp(in_file->d_name, ".") != 0 && strcmp(in_file->d_name, "..") != 0) {
             strcpy(files[(*filecount)++], in_file->d_name);
         }
     }
@@ -118,13 +130,13 @@ CursorObserver *CreateCursorObserver(const int port) {
 }
 
 FileObserver *CreateFileObserver(const char *dir) {
-    int *fo = malloc(sizeof(int));
-    *fo = 1;
+    FileObserver *fo = malloc(sizeof(FileObserver));
 
-    int filecount;
-    char **files = GetFiles(dir, &filecount);
-    for (int i=0; i<filecount; i++) {
-        printf("%s\n", files[i]);
+    fo->filenames = GetFiles(dir, &(fo->filecount));
+    printf("Observing following files:\n");
+
+    for (int i=0; i<fo->filecount; i++) {
+        printf("\t-%s\n", fo->filenames[i]);
     }
 
     return fo;
@@ -146,8 +158,13 @@ Observer *CreateObserver(const char *path, const int port) {
 }
 
 void DestroyObserver(Observer *obs) {
+    /* Destroying Cursor Observer */
     CLOSESOCKET(obs->co->socket);
     free(obs->co);
+    /* Destroying File Observer */
+    for (int i=0; i<MAXFILENUM; i++) {
+        free(obs->fo->filenames[i]);
+    }
     free(obs->fo);
     free(obs);
 }

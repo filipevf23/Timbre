@@ -13,14 +13,14 @@
 
 
 int main(int argc, char **argv) {
-    printf("Starting TIMBRE . . .\n");
+    printf("Starting TIMBRE ...\n");
 
     char path[4096];
     if (getcwd(path, sizeof(path)) == NULL) {
         perror("getcwd()");
         exit(EXIT_FAILURE);
-    }
-
+    } 
+    
     Timbre(path);
 
     printf("Succesfully ran TIMBRE!\n");
